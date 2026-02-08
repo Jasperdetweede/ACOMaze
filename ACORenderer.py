@@ -73,6 +73,7 @@ class ACORenderer:
         self._edit_from_event(event)
 
     def _on_key_press(self, event):
+        print("KEY EVENT:", repr(event.key))
         if event.key == "d":
             self.mode = "draw"
             print("Mode: draw")

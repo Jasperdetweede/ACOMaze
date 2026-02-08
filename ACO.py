@@ -5,7 +5,8 @@ import Types
 class ACO:
     def __init__(self, 
             maze: Types.Maze, start: Types.Coord, goal: Types.Coord, 
-            ants: int, pheromones: float, evaporation: float, initialisation: float, alpha: float
+            ants: int, pheromones: float, evaporation: float, initialisation: float, alpha: float,
+            verbose: bool = False
         ) -> None:
         '''
         :param ants: number of ants for each iteration.
@@ -14,6 +15,8 @@ class ACO:
         :initialisation: the level at which the pheromones will be set initialy
         :alpha: the chance (fraction) an ant takes a random path
         '''
+        # Utility
+        self.verbose = verbose
 
         # Values
         self.ants = ants
@@ -53,38 +56,37 @@ class ACO:
         paths = []
 
         for ant in range(self.ants):
-            # TODO: make path a heap, so you can easily pop elements (should be faster?)
 
             # keep the path and points on which we need to choose the next step
             last_pos = self.start
             pos = self.start
+
             path = [self.start]
-            junctions = [self.start]
+            visited: set[Types.Coord] = set()
+            visited.add(self.start)
             
             
             while not pos == self.goal:
                 # Get next step
-                next_pos, was_junction = self.__find_next_step(last_pos, pos)
+                next_pos, was_junction = self.__find_next_step(last_pos, pos, visited)
 
-                # Go back when stuck in a corner or back on point where ant has already been
-                if next_pos == pos or next_pos in junctions:
-                    go_back_until = next_pos
-                    next_pos = path.pop()
-                    while next_pos != go_back_until:
-                        next_pos = path.pop()
+                # Go back when stuck in a corner
+                if next_pos == last_pos:
+                    last_pos = path.pop()
+                    pos = path[-1] 
 
-                # Update lists and positions
-                path.append(next_pos)
-                if was_junction: junctions.append(pos)
-                last_pos = pos
-                pos = next_pos
+                else: 
+                    path.append(next_pos)
+                    visited.add(next_pos)
+
+                    last_pos = pos
+                    pos = next_pos
             
             paths.append(path)
-
-        print(paths)
+            
         return paths
 
-    def __find_next_step(self, last_pos: Types.Coord, pos: Types.Coord) -> tuple[Types.Coord, bool]:
+    def __find_next_step(self, last_pos: Types.Coord, pos: Types.Coord, visited: set[Types.Coord]) -> tuple[Types.Coord, bool]:
         """
         Returns the next step for the ant, or the current position if there is no valid next step.
         """
@@ -102,13 +104,18 @@ class ACO:
                 continue
 
             # Check if cell is not a wall or the last position (swap x and y when accessing the maze)
+            # The check for last_pos is also in 'visited', but serves as optimisation 
             if self.maze[ny, nx] == -1 or (nx, ny) == last_pos:
+                continue
+
+            # Skip visited cells
+            if ((nx, ny) in visited):
                 continue
             
             # If we can go to the goal, always go there
-            if (ny, nx) == self.goal:
+            if (nx, ny) == self.goal:
                 return (nx, ny), False
-                
+
             neighbours.append((nx, ny))
 
         # Find the weights of each neighbour (swap x and y when accessing the maze)
@@ -118,13 +125,16 @@ class ACO:
 
         # Return current step if there is no valid neighbour
         if len(neighbours) == 0:
-            return pos, False
+            if self.verbose: print("Backtracking to: ", last_pos)
+            return last_pos, False
 
         # Return a weighted choice of next steps and wheather current pos is a junction
         was_junction = len(neighbours) > 1
         next_step = random.choices(neighbours, weights=weights, k=1)[0]
         if random.uniform(0, 1) < self.alpha:
             next_step = random.choice(neighbours)
+
+        if self.verbose: print("next step: ", next_step)
         return next_step, was_junction
 
     def __update_pheromones(self, paths: list[Types.Path]):
